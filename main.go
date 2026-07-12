@@ -4,20 +4,24 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"time"
 )
 
-func Get(url string) (resp *http.Response, err error) {
+func Get(url string) (resp *http.Response, elapsed time.Duration, err error) {
+	start := time.Now()
 	resp, err = http.Get(url)
 	if err != nil {
-		log.Fatal(err)
+		log.Printf("Execution failed, %v", err)
 	}
-	return resp, err
+	elapsed = time.Since(start)
+	return resp, elapsed, err
 }
 
 func main() {
-	resp, err := Get("https://www.google.com")
+	resp, latency, err := Get("https://www.ekamjot.me")
 	if err != nil {
 		log.Fatal(err)
 	}
 	fmt.Println(resp.StatusCode)
+	fmt.Printf("Latency time: %v", latency)
 }
