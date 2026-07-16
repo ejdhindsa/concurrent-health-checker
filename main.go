@@ -49,8 +49,12 @@ func init() {
 }
 
 func Get(url string) (resp *http.Response, elapsed time.Duration, err error) {
+	client := http.Client{
+		Timeout: time.Duration(timeoutFlag) * time.Second,
+	}
+
 	start := time.Now()
-	resp, err = http.Get(url)
+	resp, err = client.Get(url)
 	if err != nil {
 		log.Printf("Execution failed, %v", err)
 	}
