@@ -15,14 +15,46 @@ var (
 	timeoutFlag     int
 )
 
+type Result struct {
+	URL        string
+	StatusCode int
+	Latency    time.Duration
+	Err        error
+}
+
+func worker(jobs <-chan string, results chan<- Result) {
+	for url := range jobs {
+		resp, latency, err := Get(url)
+
+		var status int
+
+		if resp != nil {
+			status = resp.StatusCode
+		}
+
+		result := Result{
+			URL:        url,
+			StatusCode: status,
+			Latency:    latency,
+			Err:        err,
+		}
+
+		results <- result
+	}
+}
+
 func init() {
 	flag.IntVar(&concurrencyFlag, "c", 10, "Number of concurrent tasks.")
 	flag.IntVar(&timeoutFlag, "timeout", 10, "Timeout before the URL is skipped.")
 }
 
 func Get(url string) (resp *http.Response, elapsed time.Duration, err error) {
+	client := http.Client{
+		Timeout: time.Duration(timeoutFlag) * time.Second,
+	}
+
 	start := time.Now()
-	resp, err = http.Get(url)
+	resp, err = client.Get(url)
 	if err != nil {
 		log.Printf("Execution failed, %v", err)
 	}
@@ -54,22 +86,27 @@ func ReadURLs() (urls []string, err error) {
 func main() {
 	flag.Parse()
 
-	resp, latency, err := Get("https://www.ekamjot.me")
-	if err != nil {
-		log.Fatal(err)
-	}
-
 	urls, err := ReadURLs()
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	for _, value := range urls {
-		fmt.Printf("URL: %v\n", value)
+	jobs := make(chan string, len(urls))
+	result := make(chan Result, len(urls))
+
+	for range concurrencyFlag {
+		go worker(jobs, result)
 	}
 
-	fmt.Println(resp.StatusCode)
-	fmt.Printf("Latency time: %v\n", latency)
+	for _, url := range urls {
+		jobs <- url
+	}
 
-	fmt.Printf("Concurrency flag value, %v\n", concurrencyFlag)
+	close(jobs)
+
+	for range len(urls) {
+		res := <-result
+
+		fmt.Printf("URL: %s | Status: %d | Latency: %v\n", res.URL, res.StatusCode, res.Latency)
+	}
 }
