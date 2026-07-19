@@ -7,6 +7,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"text/tabwriter"
 	"time"
 )
 
@@ -55,9 +56,7 @@ func Get(url string) (resp *http.Response, elapsed time.Duration, err error) {
 
 	start := time.Now()
 	resp, err = client.Get(url)
-	if err != nil {
-		log.Printf("Execution failed, %v", err)
-	}
+
 	elapsed = time.Since(start)
 	return resp, elapsed, err
 }
@@ -83,6 +82,40 @@ func ReadURLs() (urls []string, err error) {
 	return urls, nil
 }
 
+func printInformation(urls []string, result chan Result) {
+	failed := false
+	w := tabwriter.NewWriter(os.Stdout, 0, 0, 3, ' ', 0)
+
+	_, _ = fmt.Fprintf(w, "URL\tSTATUS\tLATENCY\tERROR\n")
+
+	for range len(urls) {
+		res := <-result
+
+		if res.StatusCode != 200 {
+			failed = true
+		}
+
+		printErr := ""
+
+		if res.Err == nil {
+			printErr = "N/A"
+			_, _ = fmt.Fprintf(w, "%s\t%d\t%v\t%v\n", res.URL, res.StatusCode, res.Latency, printErr)
+		} else {
+			_, _ = fmt.Fprintf(w, "%s\t%d\t%v\t%v\n", res.URL, res.StatusCode, res.Latency, res.Err)
+		}
+
+	}
+
+	err := w.Flush()
+	if err != nil {
+		log.Fatalf("Error flushing the Tabwriter, %e", err)
+	}
+
+	if failed {
+		os.Exit(1)
+	}
+}
+
 func main() {
 	flag.Parse()
 
@@ -104,9 +137,5 @@ func main() {
 
 	close(jobs)
 
-	for range len(urls) {
-		res := <-result
-
-		fmt.Printf("URL: %s | Status: %d | Latency: %v\n", res.URL, res.StatusCode, res.Latency)
-	}
+	printInformation(urls, result)
 }
